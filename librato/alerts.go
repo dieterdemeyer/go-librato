@@ -45,6 +45,40 @@ type AlertAttributes struct {
 	RunbookURL *string `json:"runbook_url,omitempty"`
 }
 
+// AlertListOptions specifies the optional parameters to the AlertService.Find
+// method.
+type AlertListOptions struct {
+	// filter by name
+	Name string `url:"name,omitempty"`
+}
+
+type listAlertsResponse struct {
+	Alerts []Alert `json:"alerts"`
+}
+
+// List alerts using the provided options.
+//
+// Librato API docs: http://dev.librato.com/v1/get/alerts
+func (s *AlertsService) List(opt *AlertListOptions) ([]Alert, *http.Response, error) {
+	u, err := urlWithOptions("alerts", opt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	req, err := s.client.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var alertsResp listAlertsResponse
+	resp, err := s.client.Do(req, &alertsResp)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return alertsResp.Alerts, resp, nil
+}
+
 // Get an alert by ID
 //
 // Librato API docs: https://www.librato.com/docs/api/#retrieve-alert-by-id
