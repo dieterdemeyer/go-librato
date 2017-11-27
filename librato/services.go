@@ -25,6 +25,33 @@ func (a Service) String() string {
 	return Stringify(a)
 }
 
+type listServicesResponse struct {
+	Services []Service `json:"services"`
+}
+
+// List services using the provided options.
+//
+// Librato API docs: http://dev.librato.com/v1/get/services
+func (s *ServicesService) List() ([]Service, *http.Response, error) {
+	u, err := urlWithOptions("services", nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	req, err := s.client.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var servicesResp listServicesResponse
+	resp, err := s.client.Do(req, &servicesResp)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return servicesResp.Services, resp, nil
+}
+
 // Get a service by ID
 //
 // Librato API docs: https://www.librato.com/docs/api/#retrieve-specific-service
