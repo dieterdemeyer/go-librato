@@ -23,6 +23,8 @@ type Alert struct {
 	Description  *string          `json:"description,omitempty"`
 	Active       *bool            `json:"active,omitempty"`
 	RearmSeconds *uint            `json:"rearm_seconds,omitempty"`
+	// Required for older "mixed mode" source & tags Librato accounts
+	Md *bool `json:"md,omitempty"`
 }
 
 func (a Alert) String() string {
@@ -31,13 +33,21 @@ func (a Alert) String() string {
 
 // AlertCondition represents an alert trigger condition.
 type AlertCondition struct {
-	Type            *string  `json:"type,omitempty"`
-	MetricName      *string  `json:"metric_name,omitempty"`
-	Source          *string  `json:"source,omitempty"`
-	DetectReset     *bool    `json:"detect_reset,omitempty"`
-	Threshold       *float64 `json:"threshold,omitempty"`
-	SummaryFunction *string  `json:"summary_function,omitempty"`
-	Duration        *uint    `json:"duration,omitempty"`
+	ID              *uint                  `json:"id,omitempty"`
+	Type            *string                `json:"type"`
+	MetricName      *string                `json:"metric_name"`
+	Source          *string                `json:"source,omitempty"`
+	Tags            []AlertConditionTagSet `json:"tags,omitempty"`
+	DetectReset     *bool                  `json:"detect_reset,omitempty"`
+	Threshold       *float64               `json:"threshold,omitempty"`
+	SummaryFunction *string                `json:"summary_function,omitempty"`
+	Duration        *uint                  `json:"duration,omitempty"`
+}
+
+type AlertConditionTagSet struct {
+	Name    *string   `json:"name"`
+	Grouped *bool     `json:"grouped,omitempty"`
+	Values  []*string `json:"values"`
 }
 
 // AlertAttributes represents the attributes of an alert.
@@ -117,10 +127,10 @@ func (a *AlertsService) Create(alert *Alert) (*Alert, *http.Response, error) {
 	return al, resp, err
 }
 
-// Edit an alert.
+// Update an alert.
 //
 // Librato API docs: https://www.librato.com/docs/api/?shell#update-alert
-func (a *AlertsService) Edit(alertID uint, alert *Alert) (*http.Response, error) {
+func (a *AlertsService) Update(alertID uint, alert *Alert) (*http.Response, error) {
 	u := fmt.Sprintf("alerts/%d", alertID)
 	req, err := a.client.NewRequest("PUT", u, alert)
 	if err != nil {

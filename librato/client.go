@@ -44,10 +44,11 @@ type Client struct {
 	UserAgent string
 
 	// Services used to manipulate API entities.
-	Spaces   *SpacesService
-	Metrics  *MetricsService
-	Alerts   *AlertsService
-	Services *ServicesService
+	Spaces      *SpacesService
+	Metrics     *MetricsService
+	Alerts      *AlertsService
+	Services    *ServicesService
+	Annotations *AnnotationsService
 }
 
 // NewClient returns a new Librato API client bound to the public Librato API.
@@ -80,6 +81,7 @@ func NewClientWithBaseURL(baseURL *url.URL, email, token string) *Client {
 	c.Metrics = &MetricsService{client: c}
 	c.Alerts = &AlertsService{client: c}
 	c.Services = &ServicesService{client: c}
+	c.Annotations = &AnnotationsService{client: c}
 
 	return c
 }
@@ -100,9 +102,9 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 	var buf io.ReadWriter
 	if body != nil {
 		buf = new(bytes.Buffer)
-		err := json.NewEncoder(buf).Encode(body)
-		if err != nil {
-			return nil, err
+		encodeErr := json.NewEncoder(buf).Encode(body)
+		if encodeErr != nil {
+			return nil, encodeErr
 		}
 	}
 
@@ -140,7 +142,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 		return resp, err
 	}
 
-	if v != nil {
+	if v != nil && resp.ContentLength != 0 {
 		if w, ok := v.(io.Writer); ok {
 			_, err = io.Copy(w, resp.Body)
 		} else {
@@ -161,6 +163,33 @@ type ErrorResponse struct {
 	Errors ErrorResponseMessages `json:"errors"`
 }
 
+// RenderErrorFromArray returns a string with the parameter errors
+func RenderErrorFromArray(errors []interface{}) string {
+	buf := new(bytes.Buffer)
+
+	for _, err := range errors {
+		fmt.Fprintf(buf, " %s,", err.(string))
+	}
+
+	return buf.String()
+}
+
+// RenderErrorFromMap returns a string with the parameter errors
+// (e.g. from Conditions)
+func RenderErrorFromMap(errors map[string]interface{}) string {
+	buf := new(bytes.Buffer)
+
+	for cond, condErrs := range errors {
+		fmt.Fprintf(buf, " %s:", cond)
+		for _, err := range condErrs.([]interface{}) {
+			fmt.Fprintf(buf, " %s,", err.(string))
+		}
+
+	}
+
+	return buf.String()
+}
+
 func (er *ErrorResponse) Error() string {
 	buf := new(bytes.Buffer)
 
@@ -168,8 +197,13 @@ func (er *ErrorResponse) Error() string {
 		buf.WriteString(" Parameter errors:")
 		for param, errs := range er.Errors.Params {
 			fmt.Fprintf(buf, " %s:", param)
-			for _, err := range errs {
-				fmt.Fprintf(buf, " %s,", err)
+			switch errs.(type) {
+			case []interface{}:
+				buf.WriteString(RenderErrorFromArray(errs.([]interface{})))
+			case map[string]interface{}:
+				buf.WriteString(RenderErrorFromMap(errs.(map[string]interface{})))
+			default:
+				buf.WriteString(" could not parse parameter errors")
 			}
 		}
 		buf.WriteString(".")
@@ -202,9 +236,13 @@ func (er *ErrorResponse) Error() string {
 
 // ErrorResponseMessages contains error messages returned from the Librato API.
 type ErrorResponseMessages struct {
-	Params  map[string][]string `json:"params,omitempty"`
-	Request []string            `json:"request,omitempty"`
-	System  []string            `json:"system,omitempty"`
+	Params  map[string]interface{} `json:"params,omitempty"`
+	Request []string               `json:"request,omitempty"`
+	System  []string               `json:"system,omitempty"`
+}
+
+type ConditionParamError struct {
+	Condition map[string][]string `json:"conditions,omitempty"`
 }
 
 // CheckResponse checks the API response for errors; and returns them if
